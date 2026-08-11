@@ -1,0 +1,5 @@
+volume/*.db
+volume/*.db-shm
+volume/*.db-wal
+volume/*
+!volume/.gitkeep

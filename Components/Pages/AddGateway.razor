@@ -1,0 +1,202 @@
+@page  "/gateways/new"
+@rendermode InteractiveServer
+
+
+@using OcelotAdmin.Domain
+@using OcelotAdmin.Features.Gateways
+
+
+@inject GatewayService GatewayService
+@inject NavigationManager Navigation
+
+<PageTitle>Add Gateway</PageTitle>
+
+<h1>Add Gateway</h1>
+
+<EditForm Model="model" OnValidSubmit="CreateGatewayAsync" FormName="create-gateway-form">
+    <DataAnnotationsValidator></DataAnnotationsValidator>
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger">
+            @error
+        </div>
+    }
+    
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+
+        <InputText
+            class="form-control"
+            @bind-Value="model.Name" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+
+        <InputTextArea
+            class="form-control"
+            @bind-Value="model.Description" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">
+            Configuration Store
+        </label>
+
+        <InputSelect
+            class="form-select"
+            @bind-Value="model.ConfigStoreType">
+            <option value="@ConfigStoreType.File">
+                File
+            </option>
+
+            <option value="@ConfigStoreType.Consul">
+                Consul KV
+            </option>
+        </InputSelect>
+    </div>
+
+    @if (model.ConfigStoreType == ConfigStoreType.File)
+    {
+        <div class="mb-3">
+            <label class="form-label">
+                Configuration Path
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="model.File.ConfigurationPath" />
+        </div>
+    }
+
+    @if (model.ConfigStoreType == ConfigStoreType.Consul)
+    {
+        <div class="mb-3">
+            <label class="form-label">
+                Consul Address
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="model.Consul.Address" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Configuration Key
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="model.Consul.ConfigurationKey" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                ACL Token
+            </label>
+
+            <InputText
+                class="form-control"
+                type="password"
+                @bind-Value="model.Consul.Token" />
+        </div>
+    }
+
+    <button
+        type="submit"
+        class="btn btn-primary"
+        disabled="@isSaving">
+        Add Gateway
+    </button>
+</EditForm>
+@code {
+    private readonly CreateGatewayFormModel model = new();
+
+    private bool isSaving;
+    private string? error;
+
+    private async Task CreateGatewayAsync()
+    {
+        try
+        {
+            isSaving = true;
+            error = null;
+
+            var request = new CreateGatewayRequest
+            {
+                Name = model.Name,
+                Description = model.Description,
+                ConfigStoreType = model.ConfigStoreType,
+            };
+
+            if (model.ConfigStoreType == ConfigStoreType.File)
+            {
+                request.File = new FileGatewayRequest
+                {
+                    ConfigurationPath = model.File.ConfigurationPath,
+                };
+            }
+            else
+            {
+                request.Consul = new ConsulGatewayRequest
+                {
+                    Address = model.Consul.Address,
+                    ConfigurationKey = model.Consul.ConfigurationKey,
+                    Token = model.Consul.Token,
+                };
+            }
+
+            var result = await GatewayService.CreateAsync(request);
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            Navigation.NavigateTo("/gateways");
+
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
+        finally
+        {
+            isSaving = false;
+            
+        }
+    }
+    
+    private sealed class CreateGatewayFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        public ConfigStoreType ConfigStoreType { get; set; }
+            = ConfigStoreType.File;
+
+        public FileFormModel File { get; } = new();
+
+        public ConsulFormModel Consul { get; } = new();
+    }
+
+    private sealed class FileFormModel
+    {
+        public string ConfigurationPath { get; set; }
+            = string.Empty;
+    }
+
+    private sealed class ConsulFormModel
+    {
+        public string Address { get; set; }
+            = "http://localhost:8500";
+
+        public string ConfigurationKey { get; set; }
+            = string.Empty;
+
+        public string? Token { get; set; }
+    }
+}

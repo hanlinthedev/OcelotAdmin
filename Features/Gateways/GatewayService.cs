@@ -1,15 +1,18 @@
 using Microsoft.EntityFrameworkCore;
 using OcelotAdmin.Data;
 using OcelotAdmin.Domain;
+using OcelotAdmin.Infrastructure.ConfigStores;
 
 namespace OcelotAdmin.Features.Gateways;
 
 public sealed class GatewayService
 {
     private readonly OcelotAdminDbContext _dbContext;
-    public GatewayService(OcelotAdminDbContext dbContext)
+    private readonly OcelotConfigStoreResolver  _resolver;
+    public GatewayService(OcelotAdminDbContext dbContext, OcelotConfigStoreResolver resolver)
     {
         _dbContext = dbContext;
+        _resolver = resolver;
     }
 
     public async Task<Result<Gateway>> CreateAsync(CreateGatewayRequest request, CancellationToken cancellationToken = default)
@@ -73,6 +76,50 @@ public sealed class GatewayService
         _dbContext.Gateways.Add(gateway);
         await _dbContext.SaveChangesAsync(cancellationToken);
         return Result<Gateway>.Success(gateway);
+    }
+
+    public async Task<List<Gateway>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var gateways = await _dbContext.Gateways
+                                       .AsNoTracking()
+                                       .OrderBy(x=>x.Name)
+                                       .ToListAsync(cancellationToken);
+        return gateways;
+    }
+
+    public async Task<Gateway?> GetByIdAsync(Guid gatewayId, CancellationToken cancellationToken = default)
+    {
+        var gateway = await _dbContext.Gateways
+                                      .AsNoTracking()
+                                      .Include(x=>x.FileSettings)
+                                      .Include(x=>x.ConsulSettings)
+                                      .FirstOrDefaultAsync(x=>x.Id == gatewayId, cancellationToken);
+        return gateway;
+    }
+
+    public async Task<Result<string>> GetLiveConfigurationAsync(
+        Guid gatewayId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var gateway = await GetByIdAsync(gatewayId, cancellationToken);
+        if (gateway is null)
+        {
+            return Result<string>.Failure("Gateway not found.");
+        }
+
+        try
+        {
+            var store = _resolver.Resolve(gateway.ConfigStoreType);
+
+            var configuration = await store.ReadAsync(gateway, cancellationToken);
+            return Result<string>.Success(configuration);
+        }
+        catch (OcelotConfigStoreException ex)
+        {
+            Console.WriteLine(ex);
+            throw;
+        }
     }
     
     private static string? ValidateStoreSettings(

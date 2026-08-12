@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using OcelotAdmin.Components;
 using OcelotAdmin.Data;
+using OcelotAdmin.Features.Gateways;
+using OcelotAdmin.Infrastructure.ConfigStores;
+using OcelotAdmin.Infrastructure.ConfigStores.Consul;
+using OcelotAdmin.Infrastructure.ConfigStores.File;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +14,12 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddDbContext<OcelotAdminDbContext>(options => options.UseSqlite(
     builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<GatewayService>();
+builder.Services.AddHttpClient<ConsulOcelotConfigStore>();
+builder.Services.AddScoped<IOcelotConfigStore, FileOcelotConfigStore>();
+builder.Services.AddScoped<IOcelotConfigStore>(provider => provider.GetRequiredService<ConsulOcelotConfigStore>());
+builder.Services.AddScoped<OcelotConfigStoreResolver>();
 
 var app = builder.Build();
 

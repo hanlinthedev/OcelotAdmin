@@ -3,3 +3,7 @@ volume/*.db-shm
 volume/*.db-wal
 volume/*
 !volume/.gitkeep
+
+.idea
+bin
+obj

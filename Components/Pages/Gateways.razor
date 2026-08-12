@@ -1,0 +1,59 @@
+@page "/gateways"
+
+@using OcelotAdmin.Domain
+@using OcelotAdmin.Features.Gateways
+
+@inject GatewayService GatewayService
+
+<PageTitle>Gateways</PageTitle>
+    <div class="d-flex flex-row justify-content-between">
+        <h1>Gateways</h1>
+    <div>
+        <a href="/gateways/new" class="btn btn-primary">
+            Add Gateway
+        </a>
+    </div>
+</div>
+@if (_gateways is null)
+{
+    <p>loading.....</p>
+}
+else if (_gateways.Count == 0)
+{
+    <p>No gateways have been registered.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Config Store</th>
+            <th>Description</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        @foreach (var gateway in _gateways)
+        {
+            <tr>
+                <td> <a href="/gateways/@gateway.Id">
+                    @gateway.Name
+                </a></td>
+                <td>@gateway.ConfigStoreType</td>
+                <td>@gateway.Description</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code
+{
+    private List<Gateway>? _gateways;
+
+    protected override async Task OnInitializedAsync()
+    {
+       _gateways = await GatewayService.GetAllAsync();
+    }
+}

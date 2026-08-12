@@ -1,0 +1,97 @@
+@page "/gateways/{Id:guid}"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Domain
+@using OcelotAdmin.Features.Gateways
+
+@inject GatewayService GatewayService
+
+<PageTitle>Gateway</PageTitle>
+
+@if (gateway is null)
+{
+    <p>Gateway not found.</p>
+}
+else
+{
+    <h1>@gateway.Name</h1>
+
+    <dl>
+        <dt>Configuration Store</dt>
+        <dd>@gateway.ConfigStoreType</dd>
+
+        @if (gateway.FileSettings is not null)
+        {
+            <dt>Configuration Path</dt>
+            <dd>@gateway.FileSettings.ConfigurationPath</dd>
+        }
+
+        @if (gateway.ConsulSettings is not null)
+        {
+            <dt>Consul Address</dt>
+            <dd>@gateway.ConsulSettings.Address</dd>
+
+            <dt>Configuration Key</dt>
+            <dd>@gateway.ConsulSettings.ConfigurationKey</dd>
+        }
+    </dl>
+
+    <button
+        class="btn btn-primary"
+        @onclick="LoadConfigurationAsync"
+        disabled="@isLoading">
+        Load Live Configuration
+    </button>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger mt-3">
+            @error
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(configuration))
+    {
+        <pre class="mt-3">@configuration</pre>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private Gateway? gateway;
+    private string? configuration;
+    private string? error;
+    private bool isLoading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        gateway = await GatewayService.GetByIdAsync(Id);
+    }
+
+    private async Task LoadConfigurationAsync()
+    {
+        try
+        {
+            isLoading = true;
+            error = null;
+            configuration = null;
+
+            var result =
+                await GatewayService.GetLiveConfigurationAsync(Id);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            configuration = result.Value;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

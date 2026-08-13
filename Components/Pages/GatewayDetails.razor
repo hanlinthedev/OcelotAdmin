@@ -2,10 +2,12 @@
 @rendermode InteractiveServer
 
 @using OcelotAdmin.Domain
+@using OcelotAdmin.Domain.Ocelot
 @using OcelotAdmin.Features.Gateways
+@using OcelotAdmin.Features.Ocelot
 
 @inject GatewayService GatewayService
-
+@inject OcelotConfigurationService OcelotConfigurationService
 <PageTitle>Gateway</PageTitle>
 
 @if (gateway is null)
@@ -50,9 +52,56 @@ else
         </div>
     }
 
-    @if (!string.IsNullOrWhiteSpace(configuration))
+    @if (configuration is not null)
     {
-        <pre class="mt-3">@configuration</pre>
+        <h3 class="mt-4">
+            Routes (@configuration.Routes.Count)
+        </h3>
+
+        <table class="table">
+            <thead>
+            <tr>
+                <th>Methods</th>
+                <th>Upstream</th>
+                <th>Service</th>
+                <th>Downstream</th>
+                <th>Load Balancer</th>
+            </tr>
+            </thead>
+
+            <tbody>
+            @for (var i = 0; i < configuration.Routes.Count; i++)
+            {
+                var route = configuration.Routes[i];
+                <tr>
+                    <td>
+                        @string.Join(", ", route.UpstreamHttpMethod)
+                    </td>
+
+                    <td>
+                        @route.UpstreamPathTemplate
+                    </td>
+
+                    <td>
+                        @route.ServiceName
+                    </td>
+
+                    <td>
+                        @route.DownstreamPathTemplate
+                    </td>
+
+                    <td>
+                        @route.LoadBalancerOptions?.Type
+                    </td>
+                    <td>
+                        <a href="/gateways/@Id/routes/@i">
+                            Edit
+                        </a>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
     }
 }
 
@@ -61,7 +110,7 @@ else
     public Guid Id { get; set; }
 
     private Gateway? gateway;
-    private string? configuration;
+    private OcelotConfiguration? configuration;
     private string? error;
     private bool isLoading;
 
@@ -79,7 +128,7 @@ else
             configuration = null;
 
             var result =
-                await GatewayService.GetLiveConfigurationAsync(Id);
+                await OcelotConfigurationService.GetLiveAsync(Id);
 
             if (!result.IsSuccess)
             {

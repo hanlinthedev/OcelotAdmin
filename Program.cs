@@ -2,9 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using OcelotAdmin.Components;
 using OcelotAdmin.Data;
 using OcelotAdmin.Features.Gateways;
+using OcelotAdmin.Features.Ocelot;
 using OcelotAdmin.Infrastructure.ConfigStores;
 using OcelotAdmin.Infrastructure.ConfigStores.Consul;
 using OcelotAdmin.Infrastructure.ConfigStores.File;
+using OcelotAdmin.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +22,8 @@ builder.Services.AddHttpClient<ConsulOcelotConfigStore>();
 builder.Services.AddScoped<IOcelotConfigStore, FileOcelotConfigStore>();
 builder.Services.AddScoped<IOcelotConfigStore>(provider => provider.GetRequiredService<ConsulOcelotConfigStore>());
 builder.Services.AddScoped<OcelotConfigStoreResolver>();
+builder.Services.AddSingleton<OcelotConfigurationSerializer>();
+builder.Services.AddScoped<OcelotConfigurationService>();
 
 var app = builder.Build();
 

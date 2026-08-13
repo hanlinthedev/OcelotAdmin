@@ -97,30 +97,7 @@ public sealed class GatewayService
         return gateway;
     }
 
-    public async Task<Result<string>> GetLiveConfigurationAsync(
-        Guid gatewayId,
-        CancellationToken cancellationToken = default
-    )
-    {
-        var gateway = await GetByIdAsync(gatewayId, cancellationToken);
-        if (gateway is null)
-        {
-            return Result<string>.Failure("Gateway not found.");
-        }
-
-        try
-        {
-            var store = _resolver.Resolve(gateway.ConfigStoreType);
-
-            var configuration = await store.ReadAsync(gateway, cancellationToken);
-            return Result<string>.Success(configuration);
-        }
-        catch (OcelotConfigStoreException ex)
-        {
-            Console.WriteLine(ex);
-            throw;
-        }
-    }
+   
     
     private static string? ValidateStoreSettings(
         CreateGatewayRequest request)

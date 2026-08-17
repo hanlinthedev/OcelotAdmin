@@ -1,0 +1,231 @@
+@page "/{GatewayId:guid}/publish"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Features.Ocelot
+@using OcelotAdmin.Features.Ocelot.Publish
+@using OcelotAdmin.Features.Ocelot.Validation
+
+@inject OcelotConfigurationService ConfigurationService
+@inject NavigationManager Navigation
+
+<PageTitle>Publish Configuration</PageTitle>
+
+<h1>Publish Configuration</h1>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+
+@if (isLoading)
+{
+    <p>Loading publish preview...</p>
+}
+else if (preview is not null)
+{
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">
+                        Added Routes
+                    </div>
+
+                    <div class="fs-3">
+                        @preview.Diff.AddedRoutes
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">
+                        Modified Routes
+                    </div>
+
+                    <div class="fs-3">
+                        @preview.Diff.ModifiedRoutes
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">
+                        Removed Routes
+                    </div>
+
+                    <div class="fs-3">
+                        @preview.Diff.RemovedRoutes
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="text-muted">
+                        Global Config
+                    </div>
+
+                    <div class="fs-5">
+                        @(preview.Diff.GlobalConfigurationChanged
+                            ? "Changed"
+                            : "Unchanged")
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <h4>Validation</h4>
+
+    @if (preview.Validation.IsValid &&
+         preview.Validation.WarningCount == 0)
+    {
+        <div class="alert alert-success">
+            Configuration is valid.
+        </div>
+    }
+    else
+    {
+        <div class="alert @(preview.Validation.IsValid
+            ? "alert-warning"
+            : "alert-danger")">
+
+            <strong>
+                @preview.Validation.ErrorCount errors,
+                @preview.Validation.WarningCount warnings
+            </strong>
+
+            @if (preview.Validation.Issues.Count > 0)
+            {
+                <ul class="mb-0 mt-2">
+
+                    @foreach (var issue in preview.Validation.Issues)
+                    {
+                        <li>
+                            @if (issue.RouteIndex.HasValue)
+                            {
+                                <a href="/@GatewayId/routes/@issue.RouteIndex.Value/edit">
+                                    Route #@(issue.RouteIndex.Value + 1)
+                                </a>
+
+                                <span> — </span>
+                            }
+
+                            @issue.Message
+                        </li>
+                    }
+
+                </ul>
+            }
+
+        </div>
+    }
+
+    @if (!preview.Diff.HasChanges)
+    {
+        <div class="alert alert-secondary">
+            Draft contains no changes compared with the live configuration.
+        </div>
+    }
+
+    <div class="d-flex gap-2 mt-4">
+
+        <button
+            type="button"
+            class="btn btn-danger"
+            disabled="@(!preview.CanPublish || isPublishing)"
+            @onclick="PublishAsync">
+            Publish Configuration
+        </button>
+
+        <a
+            href="/@GatewayId/routes"
+            class="btn btn-secondary">
+            Back to Routes
+        </a>
+
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid GatewayId { get; set; }
+
+    private OcelotPublishPreview? preview;
+
+    private string? error;
+
+    private bool isLoading = true;
+    private bool isPublishing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        try
+        {
+            isLoading = true;
+            error = null;
+
+            var result =
+                await ConfigurationService
+                    .GetPublishPreviewAsync(
+                        GatewayId);
+
+            if (!result.IsSuccess ||
+                result.Value is null)
+            {
+                error = result.Error;
+                return;
+            }
+
+            preview = result.Value;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        try
+        {
+            isPublishing = true;
+            error = null;
+
+            var result =
+                await ConfigurationService
+                    .PublishDraftAsync(
+                        GatewayId);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            Navigation.NavigateTo(
+                $"/{GatewayId}");
+        }
+        finally
+        {
+            isPublishing = false;
+        }
+    }
+}

@@ -1,0 +1,171 @@
+@page "/{GatewayId:guid}/raw"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Features.Ocelot
+
+@inject OcelotConfigurationService ConfigurationService
+@inject NavigationManager Navigation
+
+<PageTitle>Raw Configuration</PageTitle>
+
+<h1>Raw Configuration</h1>
+
+<p class="text-muted">
+    Editing this JSON only updates the local draft.
+</p>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(success))
+{
+    <div class="alert alert-success">
+        @success
+    </div>
+}
+
+@if (isLoading)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <textarea
+        class="form-control font-monospace"
+        rows="30"
+        @bind="json">
+    </textarea>
+
+    <div class="d-flex gap-2 mt-3">
+
+        <button
+            type="button"
+            class="btn btn-primary"
+            disabled="@isSaving"
+            @onclick="SaveAsync">
+            Save Draft
+        </button>
+
+        <button
+            type="button"
+            class="btn btn-outline-secondary"
+            disabled="@isSaving"
+            @onclick="FormatAsync">
+            Format
+        </button>
+
+        <a
+            href="/@GatewayId/routes"
+            class="btn btn-secondary">
+            Back to Routes
+        </a>
+
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid GatewayId { get; set; }
+
+    private string json = string.Empty;
+
+    private string? error;
+    private string? success;
+
+    private bool isLoading = true;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            isLoading = true;
+            error = null;
+
+            var draftResult =
+                await ConfigurationService
+                    .GetOrCreateDraftAsync(GatewayId);
+
+            if (!draftResult.IsSuccess)
+            {
+                error = draftResult.Error;
+                return;
+            }
+
+            var jsonResult =
+                await ConfigurationService
+                    .GetDraftJsonAsync(GatewayId);
+
+            if (!jsonResult.IsSuccess ||
+                jsonResult.Value is null)
+            {
+                error = jsonResult.Error;
+                return;
+            }
+
+            json = jsonResult.Value;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            isSaving = true;
+            error = null;
+            success = null;
+
+            var result =
+                await ConfigurationService
+                    .SaveDraftJsonAsync(
+                        GatewayId,
+                        json);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            success = "Draft saved.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private Task FormatAsync()
+    {
+        error = null;
+        success = null;
+
+        var result =
+            ConfigurationService.FormatJson(json);
+
+        if (!result.IsSuccess ||
+            result.Value is null)
+        {
+            error = result.Error;
+            return Task.CompletedTask;
+        }
+
+        json = result.Value;
+        success = "JSON formatted.";
+
+        return Task.CompletedTask;
+    }
+}

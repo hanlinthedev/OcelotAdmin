@@ -1,6 +1,6 @@
 namespace OcelotAdmin.Infrastructure.ConfigStores;
 
-public sealed class OcelotConfigStoreException : Exception
+public class OcelotConfigStoreException : Exception
 {
 	public OcelotConfigStoreException(string message) : base(message)
 	{

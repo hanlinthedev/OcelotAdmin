@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using OcelotAdmin.Data;
 using OcelotAdmin.Domain;
+using OcelotAdmin.Features.Ocelot.Validation;
 using OcelotAdmin.Infrastructure.ConfigStores;
+using OcelotAdmin.Services;
 
 namespace OcelotAdmin.Features.Gateways;
 
@@ -9,10 +11,19 @@ public sealed class GatewayService
 {
     private readonly OcelotAdminDbContext _dbContext;
     private readonly OcelotConfigStoreResolver  _resolver;
-    public GatewayService(OcelotAdminDbContext dbContext, OcelotConfigStoreResolver resolver)
+    private readonly OcelotConfigStoreResolver _configStoreResolver;
+    private readonly OcelotConfigurationSerializer _serializer;
+    private readonly OcelotConfigurationValidator _validator;
+    public GatewayService(
+        OcelotAdminDbContext dbContext,
+        OcelotConfigStoreResolver configStoreResolver,
+        OcelotConfigurationSerializer serializer,
+        OcelotConfigurationValidator validator)
     {
         _dbContext = dbContext;
-        _resolver = resolver;
+        _configStoreResolver = configStoreResolver;
+        _serializer = serializer;
+        _validator = validator;
     }
 
     public async Task<Result<Gateway>> CreateAsync(CreateGatewayRequest request, CancellationToken cancellationToken = default)
@@ -141,4 +152,96 @@ public sealed class GatewayService
                 return "Unsupported configuration store type.";
         }
     }
+    
+    public async Task<Result<GatewayConnectionResult>>
+    TestConnectionAsync(
+        Guid gatewayId,
+        CancellationToken cancellationToken = default)
+{
+    var gateway = await _dbContext.Gateways
+        .AsNoTracking()
+        .Include(x => x.FileSettings)
+        .Include(x => x.ConsulSettings)
+        .FirstOrDefaultAsync(
+            x => x.Id == gatewayId,
+            cancellationToken);
+
+    if (gateway is null)
+    {
+        return Result<GatewayConnectionResult>.Failure(
+            "Gateway was not found.");
+    }
+
+    var store =
+        _configStoreResolver.Resolve(
+            gateway.ConfigStoreType);
+
+    var health =
+        await store.CheckHealthAsync(
+            gateway,
+            cancellationToken);
+
+    if (!health.IsReadable)
+    {
+        return Result<GatewayConnectionResult>.Success(
+            new GatewayConnectionResult
+            {
+                IsConnected = health.IsReachable,
+                ConfigExists = health.KeyExists,
+                ConfigReadable = health.IsReadable,
+                ValidJson = health.ConfigurationIsValid,
+                Message = health.Message
+            });
+    }
+
+    try
+    {
+        var readResult =
+            await store.ReadAsync(
+                gateway,
+                cancellationToken);
+
+        var json =
+            readResult.ConfigurationJson;
+
+        var configuration =
+            _serializer.Deserialize(json);
+
+        var validation =
+            _validator.Validate(configuration);
+
+        return Result<GatewayConnectionResult>.Success(
+            new GatewayConnectionResult
+            {
+                IsConnected = true,
+                ConfigExists = true,
+                ConfigReadable = true,
+                ValidJson = true,
+                ValidOcelotConfiguration =
+                    validation.IsValid,
+                RouteCount =
+                    configuration.Routes.Count,
+                Message =
+                    validation.IsValid
+                        ? "Gateway configuration is accessible and valid."
+                        : $"Configuration contains " +
+                          $"{validation.ErrorCount} validation error(s)."
+            });
+    }
+    catch (Exception ex)
+        when (ex is
+            System.Text.Json.JsonException or
+            InvalidOperationException or
+            OcelotConfigStoreException)
+    {
+        return Result<GatewayConnectionResult>.Success(
+            new GatewayConnectionResult
+            {
+                IsConnected = true,
+                ConfigExists = true,
+                ConfigReadable = true,
+                Message = ex.Message
+            });
+    }
+}
 }

@@ -1,0 +1,197 @@
+@page "/{GatewayId:guid}/history"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Domain
+@using OcelotAdmin.Features.Ocelot
+
+@inject OcelotConfigurationService ConfigurationService
+@inject NavigationManager Navigation
+
+<PageTitle>Configuration History</PageTitle>
+
+<h1>Configuration History</h1>
+
+@if (history is null)
+{
+    <p>Loading...</p>
+}
+else if (history.Count == 0)
+{
+    <div class="alert alert-secondary">
+        No configuration history exists yet.
+    </div>
+}
+else
+{
+    @if (showReplaceDraftWarning)
+    {
+        <div class="alert alert-warning">
+
+            <strong>
+                This gateway already has an active draft.
+            </strong>
+
+            <p class="mb-3">
+                Restoring this historical configuration will
+                replace the current draft. The live gateway
+                configuration will not be changed.
+            </p>
+
+            <div class="d-flex gap-2">
+
+                <button
+                    type="button"
+                    class="btn btn-danger"
+                    @onclick="ConfirmRestoreAsync">
+                    Replace Draft
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    @onclick="CancelRestore">
+                    Cancel
+                </button>
+
+            </div>
+
+        </div>
+    }
+    <div class="table-responsive">
+
+        <table class="table table-hover align-middle">
+
+            <thead>
+            <tr>
+                <th>Published At</th>
+                <th>Snapshot</th>
+                <th class="text-end">Actions</th>
+            </tr>
+            </thead>
+
+            <tbody>
+
+            @for (var i = 0; i < history.Count; i++)
+            {
+                var item = history[i];
+
+                <tr>
+                    <td>
+                        @item.PublishedAt.ToString(
+                            "yyyy-MM-dd HH:mm:ss") UTC
+                    </td>
+
+                    <td>
+                        Snapshot @(history.Count - i)
+                    </td>
+
+                    <td class="text-end">
+
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-primary"
+                            disabled="@isProcessing"
+                            @onclick="() => PrepareRestoreAsync(item.Id)">
+                            Restore as Draft
+                        </button>
+
+                    </td>
+                </tr>
+            }
+
+            </tbody>
+
+        </table>
+
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid GatewayId { get; set; }
+    
+    private bool isProcessing;
+
+    private Guid? pendingRestoreHistoryId;
+
+    private bool showReplaceDraftWarning;
+
+    private string? error;
+
+    private List<ConfigurationHistory>? history;
+
+    protected override async Task OnInitializedAsync()
+    {
+        history =
+            await ConfigurationService.GetHistoryAsync(
+                GatewayId);
+    }
+    
+    private async Task PrepareRestoreAsync(
+        Guid historyId)
+    {
+        error = null;
+
+        var hasDraft =
+            await ConfigurationService.HasDraftAsync(
+                GatewayId);
+
+        if (hasDraft)
+        {
+            pendingRestoreHistoryId =
+                historyId;
+
+            showReplaceDraftWarning =
+                true;
+
+            return;
+        }
+
+        await RestoreAsync(historyId);
+    }
+    
+    private async Task ConfirmRestoreAsync()
+    {
+        if (pendingRestoreHistoryId is null)
+        {
+            return;
+        }
+
+        await RestoreAsync(
+            pendingRestoreHistoryId.Value);
+    }
+    
+    private void CancelRestore()
+    {
+        pendingRestoreHistoryId = null;
+        showReplaceDraftWarning = false;
+    }
+    
+    private async Task RestoreAsync(Guid historyId)
+    {
+        try
+        {
+            isProcessing = true;
+            error = null;
+
+            var result =
+                await ConfigurationService
+                    .RestoreHistoryAsDraftAsync(
+                        GatewayId,
+                        historyId);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            Navigation.NavigateTo(
+                $"/{GatewayId}/routes");
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

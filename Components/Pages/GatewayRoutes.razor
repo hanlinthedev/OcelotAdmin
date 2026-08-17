@@ -1,0 +1,605 @@
+@page "/{GatewayId:guid}/routes"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Components.Shared
+@using OcelotAdmin.Domain.Ocelot
+@using OcelotAdmin.Features.Ocelot
+@using OcelotAdmin.Features.Ocelot.Validation
+
+@inject OcelotConfigurationService ConfigurationService
+@inject NavigationManager Navigation
+
+<PageTitle>Gateway Routes</PageTitle>
+
+<h1>Routes</h1>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+
+@if (configuration is null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <strong>
+                routes
+            </strong>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a
+                href="/@GatewayId/raw"
+                class="btn btn-outline-secondary">
+                Raw JSON
+            </a>
+            <button
+                type="button"
+                class="btn btn-outline-primary"
+                disabled="@isProcessing"
+                @onclick="ValidateAsync">
+                Validate
+            </button>
+            <a
+                href="/@GatewayId/routes/new"
+                class="btn btn-primary">
+                Add Route
+            </a>
+            <a
+                href="/@GatewayId/publish"
+                class="btn btn-success">
+                Review & Publish
+            </a>
+            <button
+                type="button"
+                class="btn btn-outline-danger"
+                disabled="@isProcessing"
+                @onclick="DiscardDraftAsync">
+                Discard Draft
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+
+        <div class="col-md-6">
+            <input
+                class="form-control"
+                value="@search"
+                @oninput="OnSearchChanged"
+                placeholder="Search upstream, downstream or service..." />
+        </div>
+
+        <div class="col-md-3">
+            <select
+                class="form-select"
+                value="@selectedMethod"
+                @onchange="OnMethodChanged">
+
+                <option value="">
+                    All methods
+                </option>
+
+                @foreach (var method in availableMethods)
+                {
+                    <option value="@method">
+                        @method
+                    </option>
+                }
+
+            </select>
+        </div>
+       <div class="col-md-3"> <select
+                                  class="form-select col-md-3 d-block"
+                                  value="@selectedService"
+                                  @onchange="OnServiceChanged">
+
+           <option value="">
+               All services
+           </option>
+
+           @foreach (var service in AvailableServices)
+           {
+               <option value="@service">
+                   @service
+               </option>
+           }
+
+       </select></div>
+
+    </div>
+    @if (validation is not null)
+    {
+        if (validation.IsValid &&
+            validation.WarningCount == 0)
+        {
+            <div class="alert alert-success">
+                Configuration is valid.
+            </div>
+        }
+        else
+        {
+            <div class="alert @(validation.IsValid
+                                  ? "alert-warning"
+                                  : "alert-danger")">
+
+                <strong>
+                    @validation.ErrorCount errors,
+                    @validation.WarningCount warnings
+                </strong>
+
+                <ul class="mb-0 mt-2">
+
+                    @foreach (var issue in validation.Issues)
+                    {
+                        <li>
+                            @if (issue.RouteIndex is not null)
+                            {
+                                <a href="/@GatewayId/routes/@issue.RouteIndex/edit">
+                                    Route #@(issue.RouteIndex.Value + 1)
+                                </a>
+
+                                <span> — </span>
+                            }
+
+                            @issue.Message
+                        </li>
+                    }
+
+                </ul>
+
+            </div>
+        }
+    }
+    @if (!FilteredRoutes.Any())
+    {
+        <div class="alert alert-secondary">
+            No routes match the current filters.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+
+                <thead>
+                <tr>
+                    <th>Methods</th>
+                    <th>Upstream</th>
+                    <th>Service</th>
+                    <th>Downstream</th>
+                    <th>Load Balancer</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+                </thead>
+
+                <tbody>
+
+                @foreach (var item in PagedRoutes)
+                {
+                    var route = item.Route;
+                    var routeIndex = item.Index;
+
+                    <tr>
+                        <td>
+                            @if (route.UpstreamHttpMethod.Count == 0)
+                            {
+                                <span class="text-muted">
+                                    Any
+                                </span>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-wrap gap-1">
+                                    @foreach (var method in route.UpstreamHttpMethod)
+                                    {
+                                        <span class="badge text-bg-secondary">
+                                            @method
+                                        </span>
+                                    }
+                                </div>
+                            }
+                        </td>
+
+                        <td>
+                            <code>
+                                @route.UpstreamPathTemplate
+                            </code>
+                        </td>
+
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(route.ServiceName))
+                            {
+                                <span class="text-muted">
+                                    —
+                                </span>
+                            }
+                            else
+                            {
+                                @route.ServiceName
+                            }
+                        </td>
+
+                        <td>
+                            <code>
+                                @route.DownstreamPathTemplate
+                            </code>
+                        </td>
+
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(
+                                     route.LoadBalancerOptions?.Type))
+                            {
+                                <span class="text-muted">
+                                    —
+                                </span>
+                            }
+                            else
+                            {
+                                @route.LoadBalancerOptions.Type
+                            }
+                        </td>
+
+                        <td class="text-end">
+                            <div class="d-flex justify-content-end gap-2">
+
+                                <a
+                                    href="/@GatewayId/routes/@routeIndex/edit"
+                                    class="btn btn-sm btn-outline-primary">
+                                    Edit
+                                </a>
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    disabled="@isProcessing"
+                                    @onclick="() => DuplicateAsync(routeIndex)">
+                                    Duplicate
+                                </button>
+
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-danger"
+                                    disabled="@isProcessing"
+                                    @onclick="() => DeleteAsync(routeIndex)">
+                                    Delete
+                                </button>
+
+                            </div>
+                        </td>
+                    </tr>
+                }
+
+                </tbody>
+
+            </table>
+            <div class="mt-3">
+                <Pagination
+                    TotalItems="@FilteredRoutes.Count"
+                    CurrentPage="@currentPage"
+                    CurrentPageChanged="OnPageChanged"
+                    PageSize="@pageSize"
+                    PageSizeChanged="OnPageSizeChanged" />
+            </div>
+        </div>
+    }
+}
+
+@code {
+
+    [Parameter]
+    public Guid GatewayId { get; set; }
+
+
+    private OcelotConfiguration? configuration;
+
+    private string? error;
+
+    private string search = string.Empty;
+
+    private string? selectedMethod;
+
+    private string? selectedService;
+
+    private bool isProcessing;
+
+    private int currentPage = 1;
+    
+    private int pageSize = 25;
+
+    private readonly List<string> availableMethods =
+    [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ];
+
+
+    private IEnumerable<string> AvailableServices =>
+        configuration?.Routes
+            .Select(x => x.ServiceName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+        ?? (IEnumerable<string>)[];
+
+    private IEnumerable<(OcelotRoute Route, int Index)> PagedRoutes =>
+        FilteredRoutes
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize);
+    
+    private OcelotValidationResult? validation;
+
+    private List<(OcelotRoute Route, int Index)> FilteredRoutes
+    {
+        get
+        {
+            if (configuration is null)
+            {
+                return [];
+            }
+
+            IEnumerable<(OcelotRoute Route, int Index)> routes =
+                configuration.Routes
+                             .Select(
+                                 (route, index) =>
+                                     (Route: route, Index: index));
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim();
+
+                routes = routes.Where(x =>
+                    Contains(
+                        x.Route.UpstreamPathTemplate,
+                        term) ||
+                    Contains(
+                        x.Route.DownstreamPathTemplate,
+                        term) ||
+                    Contains(
+                        x.Route.ServiceName,
+                        term) ||
+                    x.Route.UpstreamHttpMethod.Any(
+                        method =>
+                            Contains(method, term)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedMethod))
+            {
+                routes = routes.Where(x =>
+                    x.Route.UpstreamHttpMethod.Any(
+                        method =>
+                            string.Equals(
+                                method,
+                                selectedMethod,
+                                StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedService))
+            {
+                routes = routes.Where(x =>
+                    string.Equals(
+                        x.Route.ServiceName,
+                        selectedService,
+                        StringComparison.OrdinalIgnoreCase));
+            }
+
+            return routes.ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDraftAsync();
+    }
+
+
+    private async Task LoadDraftAsync()
+    {
+        error = null;
+
+        var result =
+            await ConfigurationService
+                .GetOrCreateDraftAsync(GatewayId);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            error =
+                result.Error ??
+                "Failed to load gateway draft.";
+
+            return;
+        }
+
+        configuration = result.Value;
+    }
+
+
+    private async Task ReloadDraftAsync()
+    {
+        error = null;
+
+        var result =
+            await ConfigurationService
+                .GetDraftAsync(GatewayId);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            error =
+                result.Error ??
+                "Failed to reload gateway draft.";
+
+            return;
+        }
+
+        configuration = result.Value;
+    }
+
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        search =
+            e.Value?.ToString()
+            ?? string.Empty;
+
+        currentPage = 1;
+    }
+
+
+    private async Task DuplicateAsync(int routeIndex)
+    {
+        try
+        {
+            isProcessing = true;
+            error = null;
+
+            var result =
+                await ConfigurationService
+                    .DuplicateRouteAsync(
+                        GatewayId,
+                        routeIndex);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            await ReloadDraftAsync();
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+
+    private async Task DeleteAsync(int routeIndex)
+    {
+        try
+        {
+            isProcessing = true;
+            error = null;
+
+            var result =
+                await ConfigurationService
+                    .DeleteRouteAsync(
+                        GatewayId,
+                        routeIndex);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            await ReloadDraftAsync();
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+
+    private async Task DiscardDraftAsync()
+    {
+        try
+        {
+            isProcessing = true;
+            error = null;
+
+            var result =
+                await ConfigurationService
+                    .DiscardDraftAsync(GatewayId);
+
+            if (!result.IsSuccess)
+            {
+                error = result.Error;
+                return;
+            }
+
+            Navigation.NavigateTo(
+                $"/{GatewayId}",
+                forceLoad: true);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+
+    private static bool Contains(
+        string? source,
+        string term)
+    {
+        return source?.Contains(
+            term,
+            StringComparison.OrdinalIgnoreCase) == true;
+    }
+    
+    private void OnMethodChanged(ChangeEventArgs e)
+    {
+        selectedMethod =
+            e.Value?.ToString();
+
+        currentPage = 1;
+    }
+    
+    private void OnServiceChanged(ChangeEventArgs e)
+    {
+        selectedService =
+            e.Value?.ToString();
+
+        currentPage = 1;
+    }
+    
+    private void OnPageChanged(int page)
+    {
+        currentPage = page;
+    }
+
+    private void OnPageSizeChanged(int size)
+    {
+        pageSize = size;
+        currentPage = 1;
+    }
+    
+    private async Task ValidateAsync()
+    {
+        try
+        {
+            isProcessing = true;
+            error = null;
+
+            var result =
+                await ConfigurationService.ValidateDraftAsync(
+                    GatewayId);
+
+            if (!result.IsSuccess ||
+                result.Value is null)
+            {
+                error = result.Error;
+                return;
+            }
+
+            validation = result.Value;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

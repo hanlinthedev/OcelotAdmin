@@ -1,107 +1,362 @@
-@page "/gateways/{Id:guid}"
+@page "/{Id:guid}"
 @rendermode InteractiveServer
 
+@using OcelotAdmin.Components.Shared
 @using OcelotAdmin.Domain
 @using OcelotAdmin.Domain.Ocelot
 @using OcelotAdmin.Features.Gateways
 @using OcelotAdmin.Features.Ocelot
 
 @inject GatewayService GatewayService
-@inject OcelotConfigurationService OcelotConfigurationService
-<PageTitle>Gateway</PageTitle>
+@inject OcelotConfigurationService ConfigurationService
+
+<PageTitle>Gateway Details</PageTitle>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
 
 @if (gateway is null)
 {
-    <p>Gateway not found.</p>
+    <p>Loading...</p>
 }
 else
 {
     <h1>@gateway.Name</h1>
 
-    <dl>
-        <dt>Configuration Store</dt>
-        <dd>@gateway.ConfigStoreType</dd>
-
-        @if (gateway.FileSettings is not null)
-        {
-            <dt>Configuration Path</dt>
-            <dd>@gateway.FileSettings.ConfigurationPath</dd>
-        }
-
-        @if (gateway.ConsulSettings is not null)
-        {
-            <dt>Consul Address</dt>
-            <dd>@gateway.ConsulSettings.Address</dd>
-
-            <dt>Configuration Key</dt>
-            <dd>@gateway.ConsulSettings.ConfigurationKey</dd>
-        }
-    </dl>
-
-    <button
-        class="btn btn-primary"
-        @onclick="LoadConfigurationAsync"
-        disabled="@isLoading">
-        Load Live Configuration
-    </button>
-
-    @if (!string.IsNullOrWhiteSpace(error))
+    @if (!string.IsNullOrWhiteSpace(gateway.Description))
     {
-        <div class="alert alert-danger mt-3">
-            @error
-        </div>
+        <p class="text-muted">
+            @gateway.Description
+        </p>
     }
 
-    @if (configuration is not null)
+    <div class="d-flex justify-content-start">
+        <div class="mb-3 w-25">
+            <strong>Configuration Store</strong>
+            <div>@gateway.ConfigStoreType</div>
+        </div>
+
+        @if (gateway.ConfigStoreType == ConfigStoreType.File &&
+             gateway.FileSettings is not null)
+        {
+            <div class="mb-3 w-50">
+                <strong>Configuration Path</strong>
+                <div>@gateway.FileSettings.ConfigurationPath</div>
+            </div>
+        }
+
+        @if (gateway.ConfigStoreType == ConfigStoreType.Consul &&
+             gateway.ConsulSettings is not null)
+        {
+            <div class="mb-3 w-25">
+                <strong>Consul Address</strong>
+                <div>@gateway.ConsulSettings.Address</div>
+            </div>
+
+            <div class="mb-3 w-25">
+                <strong>Configuration Key</strong>
+                <div>@gateway.ConsulSettings.ConfigurationKey</div>
+            </div>
+        }
+    </div>
+
+    <div class="d-flex gap-2 mb-4">
+
+        <button
+            type="button"
+            class="btn btn-outline-primary"
+            disabled="@isProcessing"
+            @onclick="TestConnectionAsync">
+            Test Connection
+        </button>
+
+        <button
+            type="button"
+            class="btn btn-primary"
+            disabled="@isProcessing"
+            @onclick="LoadLiveConfigurationAsync">
+            Load Live Configuration
+        </button>
+
+        <a
+            href="/@Id/routes"
+            class="btn btn-primary">
+            Manage Routes
+        </a>
+
+        <a
+            href="/@Id/history"
+            class="btn btn-outline-secondary">
+            History
+        </a>
+
+    </div>
+
+    @if (activeSection == GatewayDetailsSection.Connection)
     {
-        <h3 class="mt-4">
-            Routes (@configuration.Routes.Count)
-        </h3>
+        @if (connectionResult is not null)
+        {
+            <div class="card">
+                <div class="card-body">
 
-        <table class="table">
-            <thead>
-            <tr>
-                <th>Methods</th>
-                <th>Upstream</th>
-                <th>Service</th>
-                <th>Downstream</th>
-                <th>Load Balancer</th>
-            </tr>
-            </thead>
+                    <h4 class="card-title mb-3">
+                        Connection Status
+                    </h4>
 
-            <tbody>
-            @for (var i = 0; i < configuration.Routes.Count; i++)
+                    <dl class="row mb-0">
+
+                        <dt class="col-sm-4">
+                            Store reachable
+                        </dt>
+                        <dd class="col-sm-8">
+                            @(connectionResult.IsConnected
+                                ? "Yes"
+                                : "No")
+                        </dd>
+
+                        <dt class="col-sm-4">
+                            Configuration exists
+                        </dt>
+                        <dd class="col-sm-8">
+                            @(connectionResult.ConfigExists
+                                ? "Yes"
+                                : "No")
+                        </dd>
+
+                        <dt class="col-sm-4">
+                            Configuration readable
+                        </dt>
+                        <dd class="col-sm-8">
+                            @(connectionResult.ConfigReadable
+                                ? "Yes"
+                                : "No")
+                        </dd>
+
+                        <dt class="col-sm-4">
+                            Valid JSON
+                        </dt>
+                        <dd class="col-sm-8">
+                            @(connectionResult.ValidJson
+                                ? "Yes"
+                                : "No")
+                        </dd>
+
+                        <dt class="col-sm-4">
+                            Valid Ocelot config
+                        </dt>
+                        <dd class="col-sm-8">
+                            @(connectionResult.ValidOcelotConfiguration
+                                ? "Yes"
+                                : "No")
+                        </dd>
+
+                        @if (connectionResult.ConfigReadable)
+                        {
+                            <dt class="col-sm-4">
+                                Routes
+                            </dt>
+
+                            <dd class="col-sm-8">
+                                @connectionResult.RouteCount
+                            </dd>
+                        }
+
+                    </dl>
+
+                    @if (!string.IsNullOrWhiteSpace(
+                        connectionResult.Message))
+                    {
+                        <div class="mt-3 text-muted">
+                            @connectionResult.Message
+                        </div>
+                    }
+
+                </div>
+            </div>
+        }
+    }
+    else if (activeSection == GatewayDetailsSection.LiveConfiguration)
+    {
+        @if (liveConfiguration is not null)
+        {
+            <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <h2 class="mb-0">
+                    Routes
+                </h2>
+
+                <span class="text-muted">
+                    @FilteredLiveRoutes.Count routes
+                </span>
+
+            </div>
+
+            <div class="row g-2 mb-3">
+
+                <div class="col-md-6">
+                    <input
+                        class="form-control"
+                        value="@search"
+                        @oninput="OnSearchChanged"
+                        placeholder="Search upstream, downstream or service..." />
+                </div>
+
+                <div class="col-md-3">
+                    <select
+                        class="form-select"
+                        value="@selectedMethod"
+                        @onchange="OnMethodChanged">
+
+                        <option value="">
+                            All methods
+                        </option>
+
+                        @foreach (var method in availableMethods)
+                        {
+                            <option value="@method">
+                                @method
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <select
+                        class="form-select"
+                        value="@selectedService"
+                        @onchange="OnServiceChanged">
+
+                        <option value="">
+                            All services
+                        </option>
+
+                        @foreach (var service in AvailableServices)
+                        {
+                            <option value="@service">
+                                @service
+                            </option>
+                        }
+
+                    </select>
+                </div>
+
+            </div>
+
+            @if (FilteredLiveRoutes.Count == 0)
             {
-                var route = configuration.Routes[i];
-                <tr>
-                    <td>
-                        @string.Join(", ", route.UpstreamHttpMethod)
-                    </td>
-
-                    <td>
-                        @route.UpstreamPathTemplate
-                    </td>
-
-                    <td>
-                        @route.ServiceName
-                    </td>
-
-                    <td>
-                        @route.DownstreamPathTemplate
-                    </td>
-
-                    <td>
-                        @route.LoadBalancerOptions?.Type
-                    </td>
-                    <td>
-                        <a href="/gateways/@Id/routes/@i">
-                            Edit
-                        </a>
-                    </td>
-                </tr>
+                <div class="alert alert-secondary">
+                    No routes match the current filters.
+                </div>
             }
-            </tbody>
-        </table>
+            else
+            {
+                <div class="table-responsive">
+
+                    <table class="table table-hover align-middle">
+
+                        <thead>
+                        <tr>
+                            <th>Methods</th>
+                            <th>Upstream</th>
+                            <th>Service</th>
+                            <th>Downstream</th>
+                            <th>Load Balancer</th>
+                        </tr>
+                        </thead>
+
+                        <tbody>
+
+                        @foreach (var item in PagedLiveRoutes)
+                        {
+                            var route = item.Route;
+
+                            <tr>
+
+                                <td>
+                                    @if (route.UpstreamHttpMethod.Count == 0)
+                                    {
+                                        <span class="text-muted">
+                                            Any
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <div class="d-flex flex-wrap gap-1">
+
+                                            @foreach (var method in route.UpstreamHttpMethod)
+                                            {
+                                                <span class="badge text-bg-secondary">
+                                                    @method
+                                                </span>
+                                            }
+
+                                        </div>
+                                    }
+                                </td>
+
+                                <td>
+                                    <code>
+                                        @route.UpstreamPathTemplate
+                                    </code>
+                                </td>
+
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(route.ServiceName))
+                                    {
+                                        <span class="text-muted">
+                                            —
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @route.ServiceName
+                                    }
+                                </td>
+
+                                <td>
+                                    <code>
+                                        @route.DownstreamPathTemplate
+                                    </code>
+                                </td>
+
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(
+                                        route.LoadBalancerOptions?.Type))
+                                    {
+                                        <span class="text-muted">
+                                            —
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        @route.LoadBalancerOptions.Type
+                                    }
+                                </td>
+
+                            </tr>
+                        }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+                <div class="mt-3">
+                    <Pagination
+                        TotalItems="@FilteredLiveRoutes.Count"
+                        CurrentPage="@currentPage"
+                        CurrentPageChanged="OnPageChanged"
+                        PageSize="@pageSize"
+                        PageSizeChanged="OnPageSizeChanged" />
+                </div>
+            }
+        }
     }
 }
 
@@ -110,37 +365,278 @@ else
     public Guid Id { get; set; }
 
     private Gateway? gateway;
-    private OcelotConfiguration? configuration;
+
+    private GatewayConnectionResult? connectionResult;
+
+    private OcelotConfiguration? liveConfiguration;
+
+    private GatewayDetailsSection activeSection =
+        GatewayDetailsSection.None;
+
+    private bool isProcessing;
+
     private string? error;
-    private bool isLoading;
+
+    private string search = string.Empty;
+
+    private string? selectedMethod;
+
+    private string? selectedService;
+
+    private int currentPage = 1;
+
+    private int pageSize = 25;
+
+    private readonly List<string> availableMethods =
+    [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ];
 
     protected override async Task OnInitializedAsync()
     {
-        gateway = await GatewayService.GetByIdAsync(Id);
+        gateway =
+            await GatewayService.GetByIdAsync(Id);
     }
 
-    private async Task LoadConfigurationAsync()
+    private async Task TestConnectionAsync()
     {
         try
         {
-            isLoading = true;
+            isProcessing = true;
+
             error = null;
-            configuration = null;
+
+            /*
+             * Only one content section should exist at a time.
+             */
+            activeSection =
+                GatewayDetailsSection.None;
+
+            liveConfiguration = null;
+
+            connectionResult = null;
 
             var result =
-                await OcelotConfigurationService.GetLiveAsync(Id);
+                await GatewayService.TestConnectionAsync(Id);
 
-            if (!result.IsSuccess)
+            if (!result.IsSuccess ||
+                result.Value is null)
             {
-                error = result.Error;
+                error =
+                    result.Error ??
+                    "Failed to test gateway connection.";
+
                 return;
             }
 
-            configuration = result.Value;
+            connectionResult =
+                result.Value;
+
+            activeSection =
+                GatewayDetailsSection.Connection;
         }
         finally
         {
-            isLoading = false;
+            isProcessing = false;
         }
+    }
+
+    private async Task LoadLiveConfigurationAsync()
+    {
+        try
+        {
+            isProcessing = true;
+
+            error = null;
+
+            /*
+             * Hide Connection Status immediately.
+             */
+            activeSection =
+                GatewayDetailsSection.None;
+
+            connectionResult = null;
+
+            liveConfiguration = null;
+
+            ResetLiveTableState();
+
+            var result =
+                await ConfigurationService.GetLiveAsync(Id);
+
+            if (!result.IsSuccess ||
+                result.Value is null)
+            {
+                error =
+                    result.Error ??
+                    "Failed to load live configuration.";
+
+                return;
+            }
+
+            liveConfiguration =
+                result.Value;
+
+            activeSection =
+                GatewayDetailsSection.LiveConfiguration;
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private List<(OcelotRoute Route, int Index)> FilteredLiveRoutes
+    {
+        get
+        {
+            if (liveConfiguration is null)
+            {
+                return [];
+            }
+
+            IEnumerable<(OcelotRoute Route, int Index)> routes =
+                liveConfiguration.Routes
+                    .Select(
+                        (route, index) =>
+                            (
+                                Route: route,
+                                Index: index
+                            ));
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term =
+                    search.Trim();
+
+                routes = routes.Where(x =>
+                    Contains(
+                        x.Route.UpstreamPathTemplate,
+                        term) ||
+                    Contains(
+                        x.Route.DownstreamPathTemplate,
+                        term) ||
+                    Contains(
+                        x.Route.ServiceName,
+                        term) ||
+                    x.Route.UpstreamHttpMethod.Any(
+                        method =>
+                            Contains(method, term)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedMethod))
+            {
+                routes = routes.Where(x =>
+                    x.Route.UpstreamHttpMethod.Any(
+                        method =>
+                            string.Equals(
+                                method,
+                                selectedMethod,
+                                StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedService))
+            {
+                routes = routes.Where(x =>
+                    string.Equals(
+                        x.Route.ServiceName,
+                        selectedService,
+                        StringComparison.OrdinalIgnoreCase));
+            }
+
+            return routes.ToList();
+        }
+    }
+
+    private IEnumerable<(OcelotRoute Route, int Index)> PagedLiveRoutes =>
+        FilteredLiveRoutes
+            .Skip(
+                (currentPage - 1) *
+                pageSize)
+            .Take(pageSize);
+
+    private IEnumerable<string> AvailableServices =>
+        liveConfiguration?.Routes
+            .Select(x => x.ServiceName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!)
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+        ?? (IEnumerable<string> )[];
+
+    private void OnSearchChanged(
+        ChangeEventArgs e)
+    {
+        search =
+            e.Value?.ToString() ??
+            string.Empty;
+
+        currentPage = 1;
+    }
+
+    private void OnMethodChanged(
+        ChangeEventArgs e)
+    {
+        selectedMethod =
+            e.Value?.ToString();
+
+        currentPage = 1;
+    }
+
+    private void OnServiceChanged(
+        ChangeEventArgs e)
+    {
+        selectedService =
+            e.Value?.ToString();
+
+        currentPage = 1;
+    }
+
+    private void OnPageChanged(int page)
+    {
+        currentPage = page;
+    }
+
+    private void OnPageSizeChanged(int size)
+    {
+        pageSize = size;
+
+        currentPage = 1;
+    }
+
+    private void ResetLiveTableState()
+    {
+        search = string.Empty;
+
+        selectedMethod = null;
+
+        selectedService = null;
+
+        currentPage = 1;
+
+        pageSize = 25;
+    }
+
+    private static bool Contains(
+        string? source,
+        string term)
+    {
+        return source?.Contains(
+            term,
+            StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private enum GatewayDetailsSection
+    {
+        None,
+        Connection,
+        LiveConfiguration
     }
 }

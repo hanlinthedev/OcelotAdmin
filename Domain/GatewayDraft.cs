@@ -8,4 +8,5 @@ public sealed class GatewayDraft
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public Gateway? Gateway { get; set; }
+    public string? SourceVersion { get; set; }
 }

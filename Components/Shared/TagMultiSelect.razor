@@ -1,0 +1,115 @@
+@typeparam TItem
+
+<div class="tag-multi-select">
+
+    <div class="selected-tags">
+        @foreach (var item in SelectedValues)
+        {
+            <span class="tag">
+                @GetLabel(item)
+
+                <button
+                    type="button"
+                    class="tag-remove"
+                    @onclick="() => RemoveAsync(item)">
+                    ×
+                </button>
+            </span>
+        }
+    </div>
+
+    <select
+        class="form-select"
+        value=""
+        @onchange="OnSelectedAsync">
+
+        <option value="">
+            @Placeholder
+        </option>
+
+        @foreach (var option in AvailableOptions)
+        {
+            <option value="@GetValue(option)">
+                @GetLabel(option)
+            </option>
+        }
+
+    </select>
+
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<TItem> Options { get; set; }
+        = Array.Empty<TItem>();
+
+    [Parameter]
+    public List<TItem> SelectedValues { get; set; }
+        = [];
+
+    [Parameter]
+    public EventCallback<List<TItem>> SelectedValuesChanged { get; set; }
+
+    [Parameter]
+    public Func<TItem, string> GetValue { get; set; }
+        = item => item?.ToString() ?? string.Empty;
+
+    [Parameter]
+    public Func<TItem, string> GetLabel { get; set; }
+        = item => item?.ToString() ?? string.Empty;
+
+    [Parameter]
+    public string Placeholder { get; set; }
+        = "Select...";
+
+    private IEnumerable<TItem> AvailableOptions =>
+        Options.Where(option =>
+            !SelectedValues.Any(selected =>
+                EqualityComparer<TItem>.Default.Equals(
+                    selected,
+                    option)));
+
+    private async Task OnSelectedAsync(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var item = Options.FirstOrDefault(
+            x => GetValue(x) == value);
+
+        if (item is null)
+        {
+            return;
+        }
+
+        if (!SelectedValues.Contains(item))
+        {
+            SelectedValues =
+            [
+                .. SelectedValues,
+                item
+            ];
+
+            await SelectedValuesChanged.InvokeAsync(
+                SelectedValues);
+        }
+    }
+
+    private async Task RemoveAsync(TItem item)
+    {
+        SelectedValues =
+            SelectedValues
+                .Where(x =>
+                    !EqualityComparer<TItem>.Default.Equals(
+                        x,
+                        item))
+                .ToList();
+
+        await SelectedValuesChanged.InvokeAsync(
+            SelectedValues);
+    }
+}

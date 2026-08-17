@@ -39,4 +39,35 @@ public sealed class OcelotConfigurationSerializer
 			configuration,
 			SerializerOptions);
 	}
+	
+	public string SerializeRoute(OcelotRoute route)
+	{
+		return JsonSerializer.Serialize(
+			route,
+			SerializerOptions);
+	}
+
+	public OcelotRoute DeserializeRoute(string json)
+	{
+		var route = JsonSerializer.Deserialize<OcelotRoute>(
+			json,
+			SerializerOptions);
+
+		if (route is null)
+		{
+			throw new InvalidOperationException(
+				"Failed to deserialize Ocelot route.");
+		}
+
+		return route;
+	}
+	
+	public string Format(string json)
+	{
+		var configuration = Deserialize(json);
+
+		return Serialize(configuration);
+	}
+	
+	
 }

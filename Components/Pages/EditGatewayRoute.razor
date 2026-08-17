@@ -1,0 +1,258 @@
+@page "/{GatewayId:guid}/routes/{RouteIndex:int}/edit"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Components.Shared
+@using OcelotAdmin.Domain.Ocelot
+@using OcelotAdmin.Features.Ocelot
+
+@inject OcelotConfigurationService ConfigurationService
+@inject NavigationManager Navigation
+
+<PageTitle>Edit Route</PageTitle>
+
+<h1>Edit Route</h1>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+
+@if (route is not null)
+{
+    <EditForm Model="route" OnValidSubmit="SaveAsync">
+
+        <div class="mb-3">
+            <label class="form-label">
+                Upstream URL
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="route.UpstreamPathTemplate" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                HTTP Methods
+            </label>
+
+            <TagMultiSelect
+                TItem="string"
+                Options="availableMethods"
+                @bind-SelectedValues="selectedMethods"
+                Placeholder="Add HTTP method" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Route Is Case Sensitive
+            </label>
+
+            <InputCheckbox
+                class="form-check-input"
+                @bind-Value="routeIsCaseSensitive" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Scheme
+            </label>
+
+            <InputSelect
+                class="form-select"
+                
+                @bind-Value="route.DownstreamScheme">
+                <option value="http">http</option>
+                <option value="https">https</option>
+            </InputSelect>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Service Name
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="route.ServiceName" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Downstream URL
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="route.DownstreamPathTemplate" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Load Balancer Type
+            </label>
+
+            <InputSelect
+                class="form-select"
+                @bind-Value="loadBalancerType">
+
+                <option value="">
+                    None
+                </option>
+
+                <option value="RoundRobin">
+                    RoundRobin
+                </option>
+
+                <option value="LeastConnection">
+                    LeastConnection
+                </option>
+
+                <option value="CookieStickySessions">
+                    CookieStickySessions
+                </option>
+            </InputSelect>
+        </div>
+
+        <button
+            type="submit"
+            class="btn btn-primary">
+            Save Route
+        </button>
+
+        <a
+            href="/@GatewayId/routes"
+            class="btn btn-secondary ms-2">
+            Cancel
+        </a>
+
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid GatewayId { get; set; }
+
+    [Parameter]
+    public int RouteIndex { get; set; }
+
+    private OcelotConfiguration? configuration;
+    private OcelotRoute? route;
+    private string? error;
+
+    private bool routeIsCaseSensitive;
+    private string? loadBalancerType;
+
+    private readonly string[] availableMethods =
+    [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "HEAD"
+    ];
+
+    private List<string> selectedMethods = [];
+    protected override async Task OnInitializedAsync()
+    {
+        var result =
+            await ConfigurationService.GetOrCreateDraftAsync(
+                GatewayId);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            error = result.Error;
+            return;
+        }
+
+        configuration = result.Value;
+
+        if (RouteIndex < 0 ||
+            RouteIndex >= configuration.Routes.Count)
+        {
+            error = "Route was not found.";
+            return;
+        }
+
+        route = configuration.Routes[RouteIndex];
+
+        selectedMethods =
+            route.UpstreamHttpMethod.ToList();
+
+        routeIsCaseSensitive =
+            route.RouteIsCaseSensitive ?? false;
+
+        loadBalancerType =
+            route.LoadBalancerOptions?.Type;
+    }
+
+    private void ToggleMethod(
+        string method,
+        ChangeEventArgs args)
+    {
+        if (route is null)
+        {
+            return;
+        }
+
+        var isChecked =
+            args.Value is bool value && value;
+
+        if (isChecked)
+        {
+            if (!route.UpstreamHttpMethod.Contains(method))
+            {
+                route.UpstreamHttpMethod.Add(method);
+            }
+        }
+        else
+        {
+            route.UpstreamHttpMethod.Remove(method);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (configuration is null || route is null)
+        {
+            return;
+        }
+
+        route.UpstreamHttpMethod =
+            selectedMethods.ToList();
+
+        route.RouteIsCaseSensitive =
+            routeIsCaseSensitive;
+
+        if (string.IsNullOrWhiteSpace(loadBalancerType))
+        {
+            route.LoadBalancerOptions = null;
+        }
+        else
+        {
+            route.LoadBalancerOptions ??=
+                new LoadBalancerOptions();
+
+            route.LoadBalancerOptions.Type =
+                loadBalancerType;
+        }
+
+        var result =
+            await ConfigurationService.SaveDraftAsync(
+                GatewayId,
+                configuration);
+
+        if (!result.IsSuccess)
+        {
+            error = result.Error;
+            return;
+        }
+
+        Navigation.NavigateTo(
+            $"/{GatewayId}/routes");
+    }
+}

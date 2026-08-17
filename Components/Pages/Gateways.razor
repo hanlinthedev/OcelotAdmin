@@ -1,4 +1,4 @@
-@page "/gateways"
+@page "/"
 
 @using OcelotAdmin.Domain
 @using OcelotAdmin.Features.Gateways
@@ -37,11 +37,12 @@ else
         @foreach (var gateway in _gateways)
         {
             <tr>
-                <td> <a href="/gateways/@gateway.Id">
+                <td> <a href="/@gateway.Id">
                     @gateway.Name
                 </a></td>
                 <td>@gateway.ConfigStoreType</td>
                 <td>@gateway.Description</td>
+                
             </tr>
         }
         </tbody>

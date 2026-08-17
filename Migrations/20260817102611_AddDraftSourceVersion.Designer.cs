@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using OcelotAdmin.Data;
 
@@ -10,9 +11,11 @@ using OcelotAdmin.Data;
 namespace OcelotAdmin.Migrations
 {
     [DbContext(typeof(OcelotAdminDbContext))]
-    partial class OcelotAdminDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260817102611_AddDraftSourceVersion")]
+    partial class AddDraftSourceVersion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");

@@ -1,0 +1,300 @@
+@page "/{Id:guid}/edit"
+@rendermode InteractiveServer
+
+@using OcelotAdmin.Domain
+@using OcelotAdmin.Features.Gateways
+
+@inject GatewayService GatewayService
+@inject NavigationManager Navigation
+
+<PageTitle>Edit Gateway</PageTitle>
+
+<h1>Edit Gateway</h1>
+
+@if (isLoading)
+{
+    <p>Loading...</p>
+}
+else if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">
+        @error
+    </div>
+}
+else
+{
+    <EditForm
+        Model="model"
+        OnValidSubmit="SaveAsync"
+        FormName="edit-gateway-form">
+
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label">
+                Name
+            </label>
+
+            <InputText
+                class="form-control"
+                @bind-Value="model.Name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Description
+            </label>
+
+            <InputTextArea
+                class="form-control"
+                @bind-Value="model.Description" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Configuration Store
+            </label>
+
+            <InputSelect
+                class="form-select"
+                @bind-Value="model.ConfigStoreType">
+
+                <option value="@ConfigStoreType.File">
+                    File
+                </option>
+
+                <option value="@ConfigStoreType.Consul">
+                    Consul KV
+                </option>
+
+            </InputSelect>
+        </div>
+
+        @if (model.ConfigStoreType == ConfigStoreType.File)
+        {
+            <div class="mb-3">
+                <label class="form-label">
+                    Configuration Path
+                </label>
+
+                <InputText
+                    class="form-control"
+                    @bind-Value="model.File.ConfigurationPath" />
+            </div>
+        }
+
+        @if (model.ConfigStoreType == ConfigStoreType.Consul)
+        {
+            <div class="mb-3">
+                <label class="form-label">
+                    Consul Address
+                </label>
+
+                <InputText
+                    class="form-control"
+                    @bind-Value="model.Consul.Address" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    Configuration Key
+                </label>
+
+                <InputText
+                    class="form-control"
+                    @bind-Value="model.Consul.ConfigurationKey" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">
+                    ACL Token
+                </label>
+
+                <InputText
+                    class="form-control"
+                    type="password"
+                    @bind-Value="model.Consul.Token" />
+            </div>
+        }
+
+        <div class="d-flex gap-2">
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+                disabled="@isSaving">
+                Save Changes
+            </button>
+
+            <a
+                href="/@Id"
+                class="btn btn-secondary">
+                Cancel
+            </a>
+
+        </div>
+
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private readonly EditGatewayFormModel model =
+        new();
+
+    private bool isLoading = true;
+    private bool isSaving;
+
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var gateway =
+                await GatewayService.GetByIdAsync(Id);
+
+            if (gateway is null)
+            {
+                error =
+                    "Gateway was not found.";
+
+                return;
+            }
+
+            model.Name =
+                gateway.Name;
+
+            model.Description =
+                gateway.Description;
+
+            model.ConfigStoreType =
+                gateway.ConfigStoreType;
+
+            if (gateway.FileSettings is not null)
+            {
+                model.File.ConfigurationPath =
+                    gateway.FileSettings.ConfigurationPath;
+            }
+
+            if (gateway.ConsulSettings is not null)
+            {
+                model.Consul.Address =
+                    gateway.ConsulSettings.Address;
+
+                model.Consul.ConfigurationKey =
+                    gateway.ConsulSettings.ConfigurationKey;
+
+                model.Consul.Token =
+                    gateway.ConsulSettings.Token;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            isSaving = true;
+            error = null;
+
+            var request =
+                new UpdateGatewayRequest
+                {
+                    Name =
+                        model.Name,
+
+                    Description =
+                        model.Description,
+
+                    ConfigStoreType =
+                        model.ConfigStoreType
+                };
+
+            if (model.ConfigStoreType ==
+                ConfigStoreType.File)
+            {
+                request.File =
+                    new FileGatewayRequest
+                    {
+                        ConfigurationPath =
+                            model.File.ConfigurationPath
+                    };
+            }
+            else
+            {
+                request.Consul =
+                    new ConsulGatewayRequest
+                    {
+                        Address =
+                            model.Consul.Address,
+
+                        ConfigurationKey =
+                            model.Consul.ConfigurationKey,
+
+                        Token =
+                            model.Consul.Token
+                    };
+            }
+
+            var result =
+                await GatewayService.UpdateAsync(
+                    Id,
+                    request);
+
+            if (!result.IsSuccess)
+            {
+                error =
+                    result.Error;
+
+                return;
+            }
+
+            Navigation.NavigateTo(
+                $"/{Id}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private sealed class EditGatewayFormModel
+    {
+        public string Name { get; set; } =
+            string.Empty;
+
+        public string? Description { get; set; }
+
+        public ConfigStoreType ConfigStoreType { get; set; }
+
+        public FileFormModel File { get; } =
+            new();
+
+        public ConsulFormModel Consul { get; } =
+            new();
+    }
+
+    private sealed class FileFormModel
+    {
+        public string ConfigurationPath { get; set; } =
+            string.Empty;
+    }
+
+    private sealed class ConsulFormModel
+    {
+        public string Address { get; set; } =
+            "http://localhost:8500";
+
+        public string ConfigurationKey { get; set; } =
+            string.Empty;
+
+        public string? Token { get; set; }
+    }
+}

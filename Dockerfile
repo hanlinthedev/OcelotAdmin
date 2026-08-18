@@ -14,8 +14,7 @@ COPY . .
 
 RUN dotnet publish "OcelotAdmin.csproj" \
     -c Release \
-    -o /app/publish \
-    --no-restore
+    -o /app/publish 
 
 
 # =========================

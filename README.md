@@ -35,6 +35,7 @@ When the configuration contains dozens or hundreds of routes, manually editing J
 
 Ocelot Admin provides a UI for managing these configurations while still keeping the original Ocelot JSON as the source format.
 
+![Gateway Detail](./docs/gateway_detail.png)
 ---
 
 ## Features

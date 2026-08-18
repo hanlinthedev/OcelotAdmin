@@ -9,6 +9,7 @@
 
 @inject GatewayService GatewayService
 @inject OcelotConfigurationService ConfigurationService
+@inject NavigationManager Navigation
 
 <PageTitle>Gateway Details</PageTitle>
 
@@ -25,7 +26,25 @@
 }
 else
 {
-    <h1>@gateway.Name</h1>
+    <div class="d-flex justify-content-between">
+        <div>
+            <h1>@gateway.Name</h1>
+            
+        </div>
+        <div>
+            <a
+                href="/@gateway.Id/edit"
+                class="btn btn-outline-primary">
+                Edit
+            </a>
+            <button
+                type="button"
+                class="btn btn-danger"
+                @onclick="ShowDeleteConfirmation">
+                Remove 
+            </button>
+        </div>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(gateway.Description))
     {
@@ -95,6 +114,47 @@ else
         </a>
 
     </div>
+    
+    @if (showDeleteConfirmation)
+    {
+        <div class="alert alert-danger mt-3">
+
+            <h5>
+                Delete this gateway?
+            </h5>
+
+            <p>
+                This will remove the gateway, draft,
+                and configuration history from Ocelot Admin.
+            </p>
+
+            <p class="mb-3">
+                The actual Ocelot configuration file or
+                Consul KV entry will not be deleted.
+            </p>
+
+            <div class="d-flex gap-2">
+
+                <button
+                    type="button"
+                    class="btn btn-danger"
+                    disabled="@isDeleting"
+                    @onclick="DeleteAsync">
+                    Delete
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    disabled="@isDeleting"
+                    @onclick="CancelDelete">
+                    Cancel
+                </button>
+
+            </div>
+
+        </div>
+    }
 
     @if (activeSection == GatewayDetailsSection.Connection)
     {
@@ -397,6 +457,9 @@ else
         "OPTIONS",
         "HEAD"
     ];
+    
+    private bool showDeleteConfirmation;
+    private bool isDeleting;
 
     protected override async Task OnInitializedAsync()
     {
@@ -622,6 +685,41 @@ else
         currentPage = 1;
 
         pageSize = 25;
+    }
+    private async Task DeleteAsync()
+    {
+        try
+        {
+            isDeleting = true;
+            error = null;
+
+            var result =
+                await GatewayService.DeleteAsync(Id);
+
+            if (!result.IsSuccess)
+            {
+                error =
+                    result.Error;
+
+                return;
+            }
+
+            Navigation.NavigateTo(
+                "/");
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+    private void ShowDeleteConfirmation()
+    {
+        showDeleteConfirmation = true;
+    }
+
+    private void CancelDelete()
+    {
+        showDeleteConfirmation = false;
     }
 
     private static bool Contains(

@@ -9,8 +9,21 @@ using OcelotAdmin.Infrastructure.ConfigStores;
 using OcelotAdmin.Infrastructure.ConfigStores.Consul;
 using OcelotAdmin.Infrastructure.ConfigStores.File;
 using OcelotAdmin.Services;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var keysFolder = builder.Environment.IsProduction() 
+    ? new DirectoryInfo("/app/volume/keys")
+    : new DirectoryInfo(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+        "OcelotAdmin", 
+        "keys"));
+
+builder.Services
+       .AddDataProtection()
+       .PersistKeysToFileSystem(keysFolder)
+       .SetApplicationName("OcelotAdmin");
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -36,16 +49,17 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+    //app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
 app.UseAntiforgery();
-
+app.UseStaticFiles();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+   .AddInteractiveServerRenderMode();
+
 
 var volumePath = Path.Combine(
     app.Environment.ContentRootPath,

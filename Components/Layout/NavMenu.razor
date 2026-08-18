@@ -1,18 +1,51 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">OcelotAdmin</a>
-    </div>
-</div>
+﻿<div class="sidebar-content">
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span>   Gateways
-            </NavLink>
+    <div class="top-row ps-3 navbar navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="">
+                OcelotAdmin
+            </a>
         </div>
-    </nav>
-</div>
+    </div>
 
+    <input
+        type="checkbox"
+        title="Navigation menu"
+        class="navbar-toggler" />
+
+    <div class="nav-scrollable">
+        <nav class="nav flex-column">
+
+            <div class="nav-item px-3">
+                <NavLink
+                    class="nav-link"
+                    href=""
+                    Match="NavLinkMatch.All">
+
+                    <span
+                        class="bi bi-house-door-fill-nav-menu"
+                        aria-hidden="true">
+                    </span>
+
+                    Gateways
+                </NavLink>
+            </div>
+
+        </nav>
+    </div>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-footer-label">
+            Developed &amp; Maintained by
+        </div>
+
+        <a
+            href="https://github.com/hanlinthedev"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="sidebar-brand-link">
+            hanlinthedev
+        </a>
+    </div>
+
+</div>
